@@ -90,9 +90,9 @@ class SpxExpressScreen extends StatelessWidget {
                         color: Colors.white,
                       ),
                       const SizedBox(width: 14),
-                      Column(
+                      const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
+                        children: [
                           Text(
                             'SPX',
                             style: TextStyle(
