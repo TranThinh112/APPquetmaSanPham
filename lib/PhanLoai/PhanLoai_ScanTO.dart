@@ -43,10 +43,17 @@ class _ScanTOState extends State<ScanTO>
 
     animation = Tween<double>(begin: 0, end: 1).animate(animationController);
   }
-
-  bool isProcessing = false;
+  //kiem tra dinh dang ma 
+  bool isValidTO(String code) {
+    final regex = RegExp(r'^TO2603[A-Z0-9]{4}$', caseSensitive: false);
+    return regex.hasMatch(code.trim());
+  }
+    bool isProcessing = false;
 
   Future<void> _processCode(String code, String codeType) async {
+  //dong bo chu hoa
+  
+    code = code.trim().toUpperCase();
     if (code.isEmpty) return;
 
     if (code == result) {
@@ -55,48 +62,47 @@ class _ScanTOState extends State<ScanTO>
       return;
     }
 
-    // Kiểm tra mã SPX (bắt đầu bằng SPX)
-if (!code.toUpperCase().startsWith('TO')) {
-  if (mounted) {
+  // Kiểm tra cấu trúc SPXVN06XXXXXXXX
+  if (!isValidTO(code)) {
+    if (mounted) {
+      final messenger = ScaffoldMessenger.of(context);
 
-    final messenger = ScaffoldMessenger.of(context);
-
-    messenger.clearMaterialBanners();
-
-    messenger.showMaterialBanner(
-      const MaterialBanner(
-        content: Text(
-          "Error! Scan Again",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor: Colors.red,
-        leading: Icon(Icons.error, color: Colors.white),
-        actions: [SizedBox()], // bắt buộc phải có
-      ),
-    );
-
-    Future.delayed(const Duration(seconds: 1), () {
       messenger.clearMaterialBanners();
-    });
-  }
 
-  await player.stop();
-  await player.play(AssetSource('error.mp3'));
+      messenger.showMaterialBanner(
+        const MaterialBanner(
+          content: Text(
+            "Error! Scan Again",
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          backgroundColor: Colors.red,
+          leading: Icon(Icons.error, color: Colors.white),
+          actions: [SizedBox()],
+        ),
+      );
 
-  return;
-}
-
-    setState(() {
-      result = code;
-      type = codeType;
-    });
+      Future.delayed(const Duration(seconds: 1), () {
+        messenger.clearMaterialBanners();
+      });
+    }
 
     await player.stop();
-    await player.play(AssetSource('beep.mp3'));
+    await player.play(AssetSource('error.mp3'));
+    return;
   }
+
+  setState(() {
+    result = code;
+    type = codeType;
+  });
+
+  await player.stop();
+  await player.play(AssetSource('beep.mp3'));
+}
+
 
   void _handleBarcode(BarcodeCapture capture) async {
     if (isProcessing) return;

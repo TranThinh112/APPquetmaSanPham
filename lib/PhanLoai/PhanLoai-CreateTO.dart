@@ -12,9 +12,10 @@ class CreateTO extends StatefulWidget {
 
 class _CreateTOState extends State<CreateTO>
     with SingleTickerProviderStateMixin {
+//dem so luong ma da quet
   String result = "";
   String type = "";
-
+  int soLuong = 0;
   late AnimationController animationController;
   late Animation<double> animation;
 
@@ -43,60 +44,80 @@ class _CreateTOState extends State<CreateTO>
 
     animation = Tween<double>(begin: 0, end: 1).animate(animationController);
   }
-
+//kiem tra dinh dang ma 
+bool isValidSPX(String code) {
+  final regex = RegExp(r'^SPXVN06\d{10}$', caseSensitive: false);
+  return regex.hasMatch(code.trim());
+}
   bool isProcessing = false;
 
-  Future<void> _processCode(String code, String codeType) async {
-    if (code.isEmpty) return;
+Future<void> _processCode(String code, String codeType) async {
 
-    if (code == result) {
-      await player.stop();
-      await player.play(AssetSource('error.mp3'));
-      return;
-    }
+  code = code.trim().toUpperCase();
 
-    // Kiểm tra mã SPX (bắt đầu bằng SPX)
-if (!code.toUpperCase().startsWith('SPX')) {
-  if (mounted) {
+  if (code.isEmpty) return;
 
-    final messenger = ScaffoldMessenger.of(context);
+  final messenger = ScaffoldMessenger.of(context);
 
-    messenger.clearMaterialBanners();
+  if (code == result) {
 
-    messenger.showMaterialBanner(
-      const MaterialBanner(
-        content: Text(
-          "Error! Scan Again",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+    messenger
+      ..hideCurrentMaterialBanner()
+      ..showMaterialBanner(
+        const MaterialBanner(
+          content: Text(
+            "Error! Already scanned",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold,),
           ),
+          backgroundColor: Colors.red,
+          leading: Icon(Icons.error, color: Colors.white),
+          actions: [SizedBox()],
         ),
-        backgroundColor: Colors.red,
-        leading: Icon(Icons.error, color: Colors.white),
-        actions: [SizedBox()], // bắt buộc phải có
-      ),
-    );
+      );
 
     Future.delayed(const Duration(seconds: 1), () {
-      messenger.clearMaterialBanners();
-    });
-  }
-
-  await player.stop();
-  await player.play(AssetSource('error.mp3'));
-
-  return;
-}
-
-    setState(() {
-      result = code;
-      type = codeType;
+      messenger.hideCurrentMaterialBanner();
     });
 
     await player.stop();
-    await player.play(AssetSource('beep.mp3'));
+    await player.play(AssetSource('error.mp3'));
+    return;
   }
+
+  if (!isValidSPX(code)) {
+
+    messenger
+      ..hideCurrentMaterialBanner()
+      ..showMaterialBanner(
+        const MaterialBanner(
+          content: Text(
+            "Error! Scan Again",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.red,
+          leading: Icon(Icons.error, color: Colors.white),
+          actions: [SizedBox()],
+        ),
+      );
+
+    Future.delayed(const Duration(seconds: 1), () {
+      messenger.hideCurrentMaterialBanner();
+    });
+
+    await player.stop();
+    await player.play(AssetSource('error.mp3'));
+    return;
+  }
+
+  setState(() {
+    result = code;
+    type = codeType;
+    soLuong ++;
+  });
+
+  await player.stop();
+  await player.play(AssetSource('beep.mp3'));
+}
 
   void _handleBarcode(BarcodeCapture capture) async {
     if (isProcessing) return;
@@ -205,26 +226,52 @@ if (!code.toUpperCase().startsWith('SPX')) {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Dữ liệu input ──
-                    const Text(
-                      'Dữ liệu input:',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+                   Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'TO ID:',
+                            style: TextStyle(
+                              
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                          ),
+                          Text(
+                            'Số lượng: $soLuong',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                          ),
+
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
+                    // ── Dữ liệu input cùng hàng ──
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        const Text(
+                          'Dữ liệu input:',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+
+                        const SizedBox(width: 10),
                         Expanded(
                           child: TextField(
                             controller: inputController,
                             decoration: InputDecoration(
                               hintText: 'Nhập dữ liệu...',
                               hintStyle: TextStyle(color: Colors.grey[400]),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 12),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide(color: Colors.grey[300]!),
@@ -235,20 +282,21 @@ if (!code.toUpperCase().startsWith('SPX')) {
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                    color: Colors.orange[600]!, width: 2),
+                                borderSide: BorderSide(color: Colors.orange[600]!, width: 2),
                               ),
                               filled: true,
                               fillColor: Colors.grey[50],
                             ),
                           ),
                         ),
+
                         const SizedBox(width: 10),
+
                         ElevatedButton(
                           onPressed: () async {
                             final text = inputController.text.trim();
                             if (text.isNotEmpty) {
-                              FocusScope.of(context).unfocus(); // Ẩn bàn phím
+                              FocusScope.of(context).unfocus();
                               isProcessing = true;
                               await _processCode(text, 'Manual Input');
                               inputController.clear();
@@ -265,17 +313,15 @@ if (!code.toUpperCase().startsWith('SPX')) {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.orange[700],
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 14),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            elevation: 2,
                           ),
                           child: const Text(
                             'Confirm',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 15),
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                           ),
                         ),
                       ],
