@@ -28,8 +28,13 @@ import '../data/order_dtb.dart';
 class ScannedItem {
   final String code;
   final DateTime timestamp;
+  final double weight;
 
-  ScannedItem({required this.code, required this.timestamp});
+  ScannedItem({
+    required this.code,
+    required this.timestamp,
+    required this.weight,
+  });
 }
 
 class CreateTO extends StatefulWidget {
@@ -61,6 +66,9 @@ class _CreateTOState extends State<CreateTO>
   String? centerMessage;
   Color? centerMessageColor;
   Timer? _messageTimer;
+
+  String? _lastScannedCode;
+  DateTime _lastScannedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   final TextEditingController inputController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
@@ -106,7 +114,12 @@ class _CreateTOState extends State<CreateTO>
       // Chế độ chỉnh sửa → load dữ liệu cũ
       toId = editTO.maTO;
       _originalStatus = editTO.trangThai;
-      scannedCodes.addAll(editTO.danhSachGoiHang.map((code) => ScannedItem(code: code, timestamp: DateTime.now())));
+      scannedCodes.addAll(
+        editTO.danhSachGoiHang.map(
+          (code) =>
+              ScannedItem(code: code, timestamp: DateTime.now(), weight: 0),
+        ),
+      );
       addressController.text = editTO.diaDiemGiaoHang;
     } else {
       // Chế độ tạo mới → sinh TO ID mới + lưu vào storage
@@ -159,9 +172,31 @@ class _CreateTOState extends State<CreateTO>
     });
   }
 
+  Future<void> _playBeep() async {
+    try {
+      await player.stop();
+      await player.play(AssetSource('beep.mp3'));
+    } catch (_) {
+      // ignore audio errors
+    }
+  }
+
+  Future<void> _playErrorSound() async {
+    try {
+      await player.stop();
+      await player.play(AssetSource('error.mp3'));
+    } catch (_) {
+      // ignore audio errors
+    }
+  }
+
   bool isProcessing = false;
 
-  void _showCenterMessage(String text, Color color, {Duration duration = const Duration(milliseconds: 900)}) {
+  void _showCenterMessage(
+    String text,
+    Color color, {
+    Duration duration = const Duration(milliseconds: 900),
+  }) {
     _messageTimer?.cancel();
     setState(() {
       centerMessage = text;
@@ -183,37 +218,43 @@ class _CreateTOState extends State<CreateTO>
   Future<void> _processCode(String code, String codeType) async {
     code = code.trim().toUpperCase();
 
-    if (code.isEmpty) return;
+    if (code.isEmpty) {
+      _showCenterMessage('Mã trống, vui lòng quét lại.', Colors.orange);
+      return;
+    }
 
     // Kiểm tra đã đạt tối đa 15 gói hàng
     if (scannedCodes.length >= TOModel.maxGoiHang) {
-      _showCenterMessage('Đã đạt tối đa 15 gói hàng!', Colors.red);
-      await player.stop();
-      await player.play(AssetSource('error.mp3'));
+      _showCenterMessage(
+        'Đã đạt tối đa ${TOModel.maxGoiHang} gói hàng!',
+        Colors.red,
+      );
+      await _playErrorSound();
       return;
     }
 
     // Kiểm tra mã đã quét trước đó
     if (scannedCodes.any((item) => item.code == code)) {
-      _showCenterMessage('Error! Already scanned', Colors.red);
-      await player.stop();
-      await player.play(AssetSource('error.mp3'));
+      _showCenterMessage('Mã đã quét rồi!', Colors.red);
+      await _playErrorSound();
       return;
     }
 
     if (!isValidSPX(code)) {
-      _showCenterMessage('Error! Scan Again', Colors.red);
-      await player.stop();
-      await player.play(AssetSource('error.mp3'));
+      _showCenterMessage('Mã không hợp lệ, vui lòng quét lại.', Colors.red);
+      await _playErrorSound();
       return;
     }
     final order = await OrderDatabase.instance.getOrder(code);
 
+    double itemWeight = 0;
     if (order != null) {
       setState(() {
         station = order['station'];
-        double weight =order['weight'];
-        TongKhoiLuong += weight;
+        itemWeight = (order['weight'] is num)
+            ? (order['weight'] as num).toDouble()
+            : 0;
+        TongKhoiLuong += itemWeight;
       });
     }
 
@@ -224,7 +265,10 @@ class _CreateTOState extends State<CreateTO>
       result = code;
       type = codeType;
       // Thêm mã mới lên trên cùng
-      scannedCodes.insert(0, ScannedItem(code: code, timestamp: DateTime.now()));
+      scannedCodes.insert(
+        0,
+        ScannedItem(code: code, timestamp: DateTime.now(), weight: itemWeight),
+      );
     });
 
     // Cuộn lên đầu (mã mới) nếu có thể
@@ -241,9 +285,8 @@ class _CreateTOState extends State<CreateTO>
     // Cập nhật TO trong storage ngay sau khi thêm mã
     _updateTOInStorage();
 
-    await player.stop();
-    await player.play(AssetSource('beep.mp3'));
-    _showCenterMessage('Success Added', Colors.green);
+    await _playBeep();
+    _showCenterMessage('Thêm mã thành công', Colors.green);
   }
 
   /// Callback khi camera phát hiện barcode
@@ -258,13 +301,27 @@ class _CreateTOState extends State<CreateTO>
 
     if (newValue.isEmpty) return;
 
+    final now = DateTime.now();
+    if (newValue == _lastScannedCode &&
+        now.difference(_lastScannedAt).inMilliseconds < 800) {
+      return;
+    }
+    _lastScannedCode = newValue;
+    _lastScannedAt = now;
+
     isProcessing = true;
-
-    await _processCode(newValue, barcode.format.name);
-
-    await Future.delayed(const Duration(milliseconds: 900));
-
-    isProcessing = false;
+    try {
+      await _processCode(newValue, barcode.format.name);
+    } catch (error, stack) {
+      // Nếu xảy ra lỗi nội bộ, vẫn reset cờ và thông báo để không khóa quét
+      debugPrint('Barcode processing error: $error\n$stack');
+      _showCenterMessage('Lỗi quét mã, thử lại.', Colors.red);
+      await _playErrorSound();
+    } finally {
+      // Giữ 600ms trước khi cho phép scan tiếp để tránh quét trùng
+      await Future.delayed(const Duration(milliseconds: 600));
+      isProcessing = false;
+    }
   }
 
   /// Quét mã từ ảnh trong gallery (đọc mã barcode từ file ảnh)
@@ -280,12 +337,14 @@ class _CreateTOState extends State<CreateTO>
 
       if (newValue.isNotEmpty) {
         isProcessing = true;
-        await _processCode(newValue, barcode.format.name);
-        isProcessing = false;
+        try {
+          await _processCode(newValue, barcode.format.name);
+        } finally {
+          isProcessing = false;
+        }
         return;
       }
     }
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -323,7 +382,10 @@ class _CreateTOState extends State<CreateTO>
                 // ── Header cam ──
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [Colors.orange[300]!, Colors.orange[100]!],
@@ -348,7 +410,10 @@ class _CreateTOState extends State<CreateTO>
                       ),
                       const Spacer(),
                       IconButton(
-                        icon: Icon(Icons.photo_library, color: Colors.orange[800]),
+                        icon: Icon(
+                          Icons.photo_library,
+                          color: Colors.orange[800],
+                        ),
                         onPressed: _scanFromGallery,
                       ),
                     ],
@@ -358,7 +423,10 @@ class _CreateTOState extends State<CreateTO>
                 // ── Nội dung chính (scrollable) ──
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 16,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -466,7 +534,10 @@ class _CreateTOState extends State<CreateTO>
                                   inputController.clear();
                                   isProcessing = false;
                                 } else {
-                                  _showCenterMessage('Vui lòng nhập mã vào ô trống.', Colors.orange);
+                                  _showCenterMessage(
+                                    'Vui lòng nhập mã vào ô trống.',
+                                    Colors.orange,
+                                  );
                                 }
                               },
                               style: ElevatedButton.styleFrom(
@@ -532,9 +603,13 @@ class _CreateTOState extends State<CreateTO>
                                           decoration: BoxDecoration(
                                             gradient: LinearGradient(
                                               colors: [
-                                                Colors.orange.withValues(alpha: 0),
+                                                Colors.orange.withValues(
+                                                  alpha: 0,
+                                                ),
                                                 Colors.orange,
-                                                Colors.orange.withValues(alpha: 0),
+                                                Colors.orange.withValues(
+                                                  alpha: 0,
+                                                ),
                                               ],
                                             ),
                                           ),
@@ -546,7 +621,9 @@ class _CreateTOState extends State<CreateTO>
                                     child: Icon(
                                       Icons.camera_alt_outlined,
                                       size: 60,
-                                      color: Colors.white.withValues(alpha: 0.3),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.3,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -574,7 +651,7 @@ class _CreateTOState extends State<CreateTO>
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 360),
                             child: Container(
-                              height: 150,
+                              height: 260,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 14,
@@ -594,12 +671,60 @@ class _CreateTOState extends State<CreateTO>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'Dữ liệu quét:',
+                                  const Text(
+                                    'Mã đơn',
                                     style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
-                                      color: Colors.grey[600],
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[100],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: const [
+                                        Expanded(
+                                          flex: 4,
+                                          child: Text(
+                                            'Mã',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          flex: 2,
+                                          child: Text(
+                                            'Thời gian',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          flex: 2,
+                                          child: Text(
+                                            'Khối lượng',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 24),
+                                      ],
                                     ),
                                   ),
                                   const SizedBox(height: 6),
@@ -620,19 +745,48 @@ class _CreateTOState extends State<CreateTO>
                                             itemCount: scannedCodes.length,
                                             itemBuilder: (context, index) {
                                               final item = scannedCodes[index];
-                                              final timeStr = DateFormat('HH:mm:ss').format(item.timestamp);
+                                              final timeStr = DateFormat(
+                                                'HH:mm:ss',
+                                              ).format(item.timestamp);
                                               return Padding(
-                                                padding: const EdgeInsets.symmetric(
-                                                  vertical: 4,
-                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 4,
+                                                    ),
                                                 child: Row(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.center,
                                                   children: [
-                                                    const SizedBox(width: 8),
                                                     Expanded(
+                                                      flex: 4,
                                                       child: SelectableText(
-                                                        '${item.code} - $timeStr',
+                                                        item.code,
                                                         style: const TextStyle(
-                                                          fontSize: 14,
+                                                          fontSize: 13,
+                                                          color: Colors.black87,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      flex: 2,
+                                                      child: Text(
+                                                        timeStr,
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        style: const TextStyle(
+                                                          fontSize: 13,
+                                                          color: Colors.black87,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      flex: 2,
+                                                      child: Text(
+                                                        '${item.weight.toStringAsFixed(2)} kg',
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        style: const TextStyle(
+                                                          fontSize: 13,
                                                           color: Colors.black87,
                                                         ),
                                                       ),
@@ -640,14 +794,25 @@ class _CreateTOState extends State<CreateTO>
                                                     GestureDetector(
                                                       onTap: () {
                                                         setState(() {
-                                                          scannedCodes.removeAt(index);
+                                                          TongKhoiLuong -=
+                                                              item.weight;
+                                                          scannedCodes.removeAt(
+                                                            index,
+                                                          );
                                                         });
                                                         _updateTOInStorage();
                                                       },
-                                                      child: Icon(
-                                                        Icons.close,
-                                                        size: 18,
-                                                        color: Colors.red[400],
+                                                      child: Padding(
+                                                        padding:
+                                                            const EdgeInsets.only(
+                                                              left: 8,
+                                                            ),
+                                                        child: Icon(
+                                                          Icons.close,
+                                                          size: 18,
+                                                          color:
+                                                              Colors.red[400],
+                                                        ),
                                                       ),
                                                     ),
                                                   ],
@@ -671,15 +836,21 @@ class _CreateTOState extends State<CreateTO>
                           child: ElevatedButton(
                             onPressed: () {
                               if (scannedCodes.isEmpty) {
-                                _showCenterMessage('Chưa quét gói hàng nào!', Colors.orange);
+                                _showCenterMessage(
+                                  'Chưa quét gói hàng nào!',
+                                  Colors.orange,
+                                );
                                 return;
                               }
                               TOStorage.instance.update(
                                 toId,
                                 TOModel(
                                   maTO: toId,
-                                  danhSachGoiHang: List.from(scannedCodes),
-                                  diaDiemGiaoHang: addressController.text.trim(),
+                                  danhSachGoiHang: scannedCodes
+                                      .map((item) => item.code)
+                                      .toList(),
+                                  diaDiemGiaoHang: addressController.text
+                                      .trim(),
                                   trangThai: 'Packed',
                                 ),
                               );
@@ -725,7 +896,8 @@ class _CreateTOState extends State<CreateTO>
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        color: (centerMessageColor ?? Colors.black87).withValues(alpha: 0.9),
+                        color: (centerMessageColor ?? Colors.black87)
+                            .withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(

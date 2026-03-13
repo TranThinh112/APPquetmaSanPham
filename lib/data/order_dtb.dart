@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'dart:io';
+import 'package:flutter/services.dart';
 
 class OrderDatabase {
   static final OrderDatabase instance = OrderDatabase._init();
@@ -26,30 +28,25 @@ class OrderDatabase {
     return _database!;
   }
 
-    Future<Database> _initDB(String filePath) async {
+  Future<Database> _initDB(String filePath) async {
 
-      final dbPath = await getDatabasesPath();
-      final path = join(dbPath, filePath);
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, filePath);
 
-      print("Database path: $path");
+    print("Database path: $path");
 
-      return await openDatabase(
-        path,
-        version: 1,
-        onCreate: _createDB,
-      );
+    // nếu database chưa tồn tại → copy từ assets
+    if (!await File(path).exists()) {
+
+      ByteData data = await rootBundle.load("assets/orders_db.db");
+
+      List<int> bytes =
+      data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+
+      await File(path).writeAsBytes(bytes, flush: true);
     }
 
-  Future _createDB(Database db, int version) async {
-
-    await db.execute('''
-  CREATE TABLE orders(
-    id TEXT PRIMARY KEY,
-    station TEXT,
-    weight REAL
-  )
-  ''');
-
+    return await openDatabase(path);
   }
 
   /// tìm đơn theo ID

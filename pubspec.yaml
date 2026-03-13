@@ -70,4 +70,6 @@ flutter:
 
   assets:
     - assets/orders_db.db
+    - assets/beep.mp3
+    - assets/error.mp3
 
