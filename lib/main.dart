@@ -9,9 +9,15 @@
 /// =============================================================
 import 'package:flutter/material.dart';
 import 'phan_loai_screen.dart';
+import 'data/order_dtb.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Kiểm tra số lượng đơn hàng trong database
+  final count = await OrderDatabase.instance.countOrders();
+  print('Số lượng đơn hàng trong database: $count');
+  
   runApp(const MyApp());
 }
 
