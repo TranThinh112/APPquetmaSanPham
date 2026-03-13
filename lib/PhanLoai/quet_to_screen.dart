@@ -1,21 +1,34 @@
+/// =============================================================
+/// File: quet_to_screen.dart
+/// Mô tả: Màn hình "Scan TO" - Quét mã bao hàng TO.
+///
+/// Chức năng:
+///   - Quét mã barcode/QR của bao hàng (format: TO2603 + 4 ký tự)
+///   - Hỗ trợ nhập tay mã TO
+///   - Hỗ trợ quét từ ảnh trong gallery
+///   - Kiểm tra định dạng mã TO hợp lệ
+///   - Phát âm thanh beep (thành công) / error (thất bại)
+///   - Hiển thị kết quả mã đã quét
+///
+/// Luồng: Camera quét → validate format TO → hiển thị kết quả
+/// =============================================================
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:image_picker/image_picker.dart';
 
-class CreateTO extends StatefulWidget {
-  const CreateTO({super.key});
+class ScanTO extends StatefulWidget {
+  const ScanTO({super.key});
 
   @override
-  State<CreateTO> createState() => _CreateTOState();
+  State<ScanTO> createState() => _ScanTOState();
 }
 
-class _CreateTOState extends State<CreateTO>
+class _ScanTOState extends State<ScanTO>
     with SingleTickerProviderStateMixin {
-//dem so luong ma da quet
   String result = "";
   String type = "";
-  int soLuong = 0;
+
   late AnimationController animationController;
   late Animation<double> animation;
 
@@ -44,55 +57,45 @@ class _CreateTOState extends State<CreateTO>
 
     animation = Tween<double>(begin: 0, end: 1).animate(animationController);
   }
-//kiem tra dinh dang ma 
-bool isValidSPX(String code) {
-  final regex = RegExp(r'^SPXVN06\d{10}$', caseSensitive: false);
-  return regex.hasMatch(code.trim());
-}
-  bool isProcessing = false;
-
-Future<void> _processCode(String code, String codeType) async {
-
-  code = code.trim().toUpperCase();
-
-  if (code.isEmpty) return;
-
-  final messenger = ScaffoldMessenger.of(context);
-
-  if (code == result) {
-
-    messenger
-      ..hideCurrentMaterialBanner()
-      ..showMaterialBanner(
-        const MaterialBanner(
-          content: Text(
-            "Error! Already scanned",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold,),
-          ),
-          backgroundColor: Colors.red,
-          leading: Icon(Icons.error, color: Colors.white),
-          actions: [SizedBox()],
-        ),
-      );
-
-    Future.delayed(const Duration(seconds: 1), () {
-      messenger.hideCurrentMaterialBanner();
-    });
-
-    await player.stop();
-    await player.play(AssetSource('error.mp3'));
-    return;
+  /// Kiểm tra định dạng mã TO: TO2603 + 4 ký tự chữ/số
+  /// Ví dụ hợp lệ: TO2603AB1X
+  bool isValidTO(String code) {
+    final regex = RegExp(r'^TO2603[A-Z0-9]{4}$', caseSensitive: false);
+    return regex.hasMatch(code.trim());
   }
+    bool isProcessing = false;
 
-  if (!isValidSPX(code)) {
+  /// Xử lý mã được quét hoặc nhập tay:
+  /// - Kiểm tra trùng mã vừa quét
+  /// - Kiểm tra định dạng TO hợp lệ
+  /// - Nếu hợp lệ → cập nhật kết quả + beep
+  Future<void> _processCode(String code, String codeType) async {
+  // Chuẩn hóa chữ hoa
+  
+    code = code.trim().toUpperCase();
+    if (code.isEmpty) return;
 
-    messenger
-      ..hideCurrentMaterialBanner()
-      ..showMaterialBanner(
+    if (code == result) {
+      await player.stop();
+      await player.play(AssetSource('error.mp3'));
+      return;
+    }
+
+  // Kiểm tra cấu trúc SPXVN06XXXXXXXX
+  if (!isValidTO(code)) {
+    if (mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+
+      messenger.clearMaterialBanners();
+
+      messenger.showMaterialBanner(
         const MaterialBanner(
           content: Text(
             "Error! Scan Again",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           backgroundColor: Colors.red,
           leading: Icon(Icons.error, color: Colors.white),
@@ -100,9 +103,10 @@ Future<void> _processCode(String code, String codeType) async {
         ),
       );
 
-    Future.delayed(const Duration(seconds: 1), () {
-      messenger.hideCurrentMaterialBanner();
-    });
+      Future.delayed(const Duration(seconds: 1), () {
+        messenger.clearMaterialBanners();
+      });
+    }
 
     await player.stop();
     await player.play(AssetSource('error.mp3'));
@@ -112,12 +116,12 @@ Future<void> _processCode(String code, String codeType) async {
   setState(() {
     result = code;
     type = codeType;
-    soLuong ++;
   });
 
   await player.stop();
   await player.play(AssetSource('beep.mp3'));
 }
+
 
   void _handleBarcode(BarcodeCapture capture) async {
     if (isProcessing) return;
@@ -203,7 +207,7 @@ Future<void> _processCode(String code, String codeType) async {
                   ),
                   const Spacer(),
                   Text(
-                    'Create TO',
+                    'Scan TO',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -226,52 +230,26 @@ Future<void> _processCode(String code, String codeType) async {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                   Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'TO ID:',
-                            style: TextStyle(
-                              
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                          ),
-                          Text(
-                            'Số lượng: $soLuong',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                          ),
-
-                        ],
+                    // ── Dữ liệu input ──
+                    const Text(
+                      'Dữ liệu input:',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
                       ),
-                    const SizedBox(height: 12),
-                    // ── Dữ liệu input cùng hàng ──
+                    ),
+                    const SizedBox(height: 8),
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const Text(
-                          'Dữ liệu input:',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                        ),
-
-                        const SizedBox(width: 10),
                         Expanded(
                           child: TextField(
                             controller: inputController,
                             decoration: InputDecoration(
                               hintText: 'Nhập dữ liệu...',
                               hintStyle: TextStyle(color: Colors.grey[400]),
-                              contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide(color: Colors.grey[300]!),
@@ -282,21 +260,20 @@ Future<void> _processCode(String code, String codeType) async {
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(color: Colors.orange[600]!, width: 2),
+                                borderSide: BorderSide(
+                                    color: Colors.orange[600]!, width: 2),
                               ),
                               filled: true,
                               fillColor: Colors.grey[50],
                             ),
                           ),
                         ),
-
                         const SizedBox(width: 10),
-
                         ElevatedButton(
                           onPressed: () async {
                             final text = inputController.text.trim();
                             if (text.isNotEmpty) {
-                              FocusScope.of(context).unfocus();
+                              FocusScope.of(context).unfocus(); // Ẩn bàn phím
                               isProcessing = true;
                               await _processCode(text, 'Manual Input');
                               inputController.clear();
@@ -313,15 +290,17 @@ Future<void> _processCode(String code, String codeType) async {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.orange[700],
                             foregroundColor: Colors.white,
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
+                            elevation: 2,
                           ),
                           child: const Text(
                             'Confirm',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 15),
                           ),
                         ),
                       ],

@@ -1,5 +1,14 @@
+/// =============================================================
+/// File: main.dart
+/// Mô tả: Điểm khởi chạy ứng dụng SPX Express.
+///        Hiển thị màn hình chính (HomeScreen) với lưới 4 chức năng:
+///        - Phân Loại: quản lý bao hàng (TO)
+///        - Tra cứu đơn hàng
+///        - Quản lý đơn hàng
+///        - Cài đặt
+/// =============================================================
 import 'package:flutter/material.dart';
-import 'PhanLoai.dart';
+import 'phan_loai_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
