@@ -3,14 +3,14 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:image_picker/image_picker.dart';
 
-class ScanPage extends StatefulWidget {
-  const ScanPage({super.key});
+class CreateTO extends StatefulWidget {
+  const CreateTO({super.key});
 
   @override
-  State<ScanPage> createState() => _ScanPageState();
+  State<CreateTO> createState() => _CreateTOState();
 }
 
-class _ScanPageState extends State<ScanPage>
+class _CreateTOState extends State<CreateTO>
     with SingleTickerProviderStateMixin {
   String result = "";
   String type = "";
@@ -56,21 +56,38 @@ class _ScanPageState extends State<ScanPage>
     }
 
     // Kiểm tra mã SPX (bắt đầu bằng SPX)
-    if (!code.toUpperCase().startsWith('SPX')) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Mã không hợp lệ! Chỉ nhận mã Shopee (bắt đầu bằng SPX).'),
-            duration: Duration(seconds: 2),
-            backgroundColor: Colors.red,
+if (!code.toUpperCase().startsWith('SPX')) {
+  if (mounted) {
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    messenger.clearMaterialBanners();
+
+    messenger.showMaterialBanner(
+      const MaterialBanner(
+        content: Text(
+          "Error! Scan Again",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
-        );
-      }
-      await player.stop();
-      await player.play(AssetSource('error.mp3'));
-      return;
-    }
+        ),
+        backgroundColor: Colors.red,
+        leading: Icon(Icons.error, color: Colors.white),
+        actions: [SizedBox()], // bắt buộc phải có
+      ),
+    );
+
+    Future.delayed(const Duration(seconds: 1), () {
+      messenger.clearMaterialBanners();
+    });
+  }
+
+  await player.stop();
+  await player.play(AssetSource('error.mp3'));
+
+  return;
+}
 
     setState(() {
       result = code;
@@ -165,7 +182,7 @@ class _ScanPageState extends State<ScanPage>
                   ),
                   const Spacer(),
                   Text(
-                    'Quét Mã SPX',
+                    'Create TO',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,

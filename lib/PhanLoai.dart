@@ -1,8 +1,9 @@
+import 'package:AppQR1/PhanLoai/PhanLoai_ScanTO.dart';
 import 'package:flutter/material.dart';
-import 'camQR_SPX.dart';
+import 'PhanLoai/PhanLoai-CreateTO.dart';
 
-class SpxExpressScreen extends StatelessWidget {
-  const SpxExpressScreen({super.key});
+class PhanLoaiScreen extends StatelessWidget {
+  const PhanLoaiScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +26,7 @@ class SpxExpressScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const ScanPage(),
+                            builder: (context) => const CreateTO(),
                           ),
                         );
                       },
@@ -38,7 +39,7 @@ class SpxExpressScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const ScanPage(),
+                            builder: (context) => const ScanTO(),
                           ),
                         );
                       },

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'spx_express_screen.dart';
+import 'PhanLoai.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -70,12 +70,12 @@ class HomeScreen extends StatelessWidget {
                     buildCard(
                       Colors.blue[100]!,
                       Icons.camera_alt,
-                      "Quét QR",
+                      "Phân Loại",
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const SpxExpressScreen(),
+                            builder: (context) => const PhanLoaiScreen(),
                           ),
                         );
                       },
