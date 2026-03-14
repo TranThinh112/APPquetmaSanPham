@@ -1,21 +1,16 @@
 /// =============================================================
-/// File: danh_sach_to_screen.dart
+/// File: danh_sach_to_screen.dart (CẬP NHẬP)
 /// Mô tả: Màn hình "Created TO" - Danh sách bao hàng đã tạo.
 ///
-/// Chức năng:
-///   - Hiển thị bảng danh sách các bao hàng đã đóng gồm:
-///     + Mã bao hàng (TO ID)
-///     + Số lượng đơn hàng trong bao
-///     + Địa điểm giao hàng
-///   - Thanh tìm kiếm mã bao hàng (search text)
-///   - Nút quét QR để tìm kiếm nhanh bao hàng
-///
-/// Dữ liệu: đọc từ TOStorage (singleton in-memory)
+/// Thay đổi mới:
+///   - Lấy dữ liệu từ TODatabase (SQLite) thay vì TOStorage
+///   - Thêm column KG (trọng lượng)
+///   - Hiển thị: Mã TO | Số lượng | Địa điểm | Trạng thái | Trọng lượng (KG)
 /// =============================================================
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/to_model.dart';
-import '../data/to_storage.dart';
+import '../data/to_database.dart';
 import 'tao_bao_hang_screen.dart';
 
 class CreatedTO extends StatefulWidget {
@@ -44,20 +39,38 @@ class _CreatedTOState extends State<CreatedTO> {
     _refreshList();
   }
 
-  void _refreshList() {
-    setState(() {
-      if (searchController.text.isEmpty) {
-        filteredList = TOStorage.instance.all;
-      } else {
-        filteredList = TOStorage.instance.search(searchController.text);
-      }
-    });
+  Future<void> _refreshList() async {
+    try {
+      final allTOs = await TODatabase.instance.getAllTOs();
+      setState(() {
+        if (searchController.text.isEmpty) {
+          filteredList = allTOs;
+        } else {
+          filteredList = _searchTOs(allTOs, searchController.text);
+        }
+      });
+    } catch (e) {
+      debugPrint('Error refreshing list: $e');
+    }
   }
 
-  void _search(String keyword) {
-    setState(() {
-      filteredList = TOStorage.instance.search(keyword);
-    });
+  Future<void> _search(String keyword) async {
+    try {
+      final allTOs = await TODatabase.instance.getAllTOs();
+      setState(() {
+        filteredList = _searchTOs(allTOs, keyword);
+      });
+    } catch (e) {
+      debugPrint('Error searching: $e');
+    }
+  }
+
+  List<TOModel> _searchTOs(List<TOModel> list, String keyword) {
+    if (keyword.isEmpty) return list;
+    final upper = keyword.toUpperCase();
+    return list
+        .where((to) => to.maTO.toUpperCase().contains(upper))
+        .toList();
   }
 
   /// Mở màn hình CreateTO ở chế độ chỉnh sửa
@@ -131,42 +144,64 @@ class _CreatedTOState extends State<CreatedTO> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Header ──
+            // ── Header cam với logo SPX ──
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.orange[300]!, Colors.orange[100]!],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                color: Colors.orange[600],
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(24),
+                  bottomRight: Radius.circular(24),
                 ),
               ),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    icon: Icon(Icons.arrow_back, color: Colors.orange[800]),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Table TO',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange[800],
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.arrow_back, color: Colors.white),
+                          label: const Text(
+                            'Quay lại',
+                            style: TextStyle(color: Colors.white, fontSize: 16),
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(Icons.delete_outline, color: Colors.white),
+                          onPressed: () {
+                            setState(() {
+                              _isDeleteMode = !_isDeleteMode;
+                              _selectedTOs.clear();
+                            });
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
-                  const SizedBox(width: 48),
-                  IconButton(
-                    icon: Icon(Icons.delete_outline, color: Colors.orange[800]),
-                    onPressed: () {
-                      setState(() {
-                        _isDeleteMode = !_isDeleteMode;
-                        _selectedTOs.clear();
-                      });
-                    },
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.inventory_2,
+                          size: 50,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'SPX Express',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -239,7 +274,8 @@ class _CreatedTOState extends State<CreatedTO> {
                           (_isDeleteMode ? 2 : 1): const FixedColumnWidth(80),
                           (_isDeleteMode ? 3 : 2): const FixedColumnWidth(150),
                           (_isDeleteMode ? 4 : 3): const FixedColumnWidth(100),
-                          (_isDeleteMode ? 5 : 4): const FixedColumnWidth(50),
+                          (_isDeleteMode ? 5 : 4): const FixedColumnWidth(80),
+                          (_isDeleteMode ? 6 : 5): const FixedColumnWidth(50),
                         },
                         children: [
                           // Header row
@@ -300,6 +336,17 @@ class _CreatedTOState extends State<CreatedTO> {
                               const Padding(
                                 padding: EdgeInsets.all(10),
                                 child: Text(
+                                  'KG',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const Padding(
+                                padding: EdgeInsets.all(10),
+                                child: Text(
                                   'Sửa',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
@@ -318,35 +365,40 @@ class _CreatedTOState extends State<CreatedTO> {
                                 if (_isDeleteMode)
                                   Padding(
                                     padding: const EdgeInsets.all(8),
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          if (_selectedTOs.contains(to.maTO)) {
-                                            _selectedTOs.remove(to.maTO);
-                                          } else {
-                                            _selectedTOs.add(to.maTO);
-                                          }
-                                        });
-                                      },
-                                      child: Container(
-                                        width: 22,
-                                        height: 22,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: () {
+                                          setState(() {
+                                            if (_selectedTOs.contains(to.maTO)) {
+                                              _selectedTOs.remove(to.maTO);
+                                            } else {
+                                              _selectedTOs.add(to.maTO);
+                                            }
+                                          });
+                                        },
+                                        borderRadius: BorderRadius.circular(4),
+                                        splashColor: Colors.blue.withOpacity(0.3),
+                                        child: Container(
+                                          width: 22,
+                                          height: 22,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: _selectedTOs.contains(to.maTO)
+                                                  ? Colors.red
+                                                  : Colors.grey[400]!,
+                                              width: 2,
+                                            ),
                                             color: _selectedTOs.contains(to.maTO)
                                                 ? Colors.red
-                                                : Colors.grey[400]!,
-                                            width: 2,
+                                                : Colors.transparent,
                                           ),
-                                          color: _selectedTOs.contains(to.maTO)
-                                              ? Colors.red
-                                              : Colors.transparent,
+                                          child: _selectedTOs.contains(to.maTO)
+                                              ? const Icon(Icons.check,
+                                                  size: 14, color: Colors.white)
+                                              : null,
                                         ),
-                                        child: _selectedTOs.contains(to.maTO)
-                                            ? const Icon(Icons.check,
-                                                size: 14, color: Colors.white)
-                                            : null,
                                       ),
                                     ),
                                   ),
@@ -398,15 +450,28 @@ class _CreatedTOState extends State<CreatedTO> {
                                     ),
                                   ),
                                 ),
+                                Padding(
+                                  padding: const EdgeInsets.all(10),
+                                  child: Text(
+                                    '${to.totalWeight.toStringAsFixed(1)}',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                ),
                                 // Cột Sửa (chỉ hiện icon khi Packing)
                                 Padding(
                                   padding: const EdgeInsets.all(8),
-                                  child: GestureDetector(
-                                          onTap: () => _editTO(to),
-                                          child: Icon(Icons.edit,
-                                              color: Colors.orange[700],
-                                              size: 22),
-                                        ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () => _editTO(to),
+                                      borderRadius: BorderRadius.circular(20),
+                                      splashColor: Colors.orange.withOpacity(0.3),
+                                      child: Icon(Icons.edit,
+                                          color: Colors.orange[600],
+                                          size: 22),
+                                    ),
+                                  ),
                                 ),
                               ],
                             );
@@ -430,9 +495,9 @@ class _CreatedTOState extends State<CreatedTO> {
                       child: ElevatedButton(
                         onPressed: _selectedTOs.isEmpty
                             ? null
-                            : () {
+                            : () async {
                                 for (final maTO in _selectedTOs) {
-                                  TOStorage.instance.remove(maTO);
+                                  await TODatabase.instance.deleteTO(maTO);
                                 }
                                 setState(() {
                                   _selectedTOs.clear();
@@ -446,6 +511,8 @@ class _CreatedTOState extends State<CreatedTO> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
+                          elevation: 6,
+                          shadowColor: Colors.red.withOpacity(0.5),
                         ),
                         child: Text(
                           'Xác nhận xóa (${_selectedTOs.length})',

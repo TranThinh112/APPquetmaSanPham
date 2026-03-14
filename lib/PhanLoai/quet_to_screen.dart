@@ -188,36 +188,59 @@ class _ScanTOState extends State<ScanTO>
       body: SafeArea(
         child: Column(
           children: [
-            // ── Header cam ──
+            // ── Header cam với logo SPX ──
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.orange[300]!, Colors.orange[100]!],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                color: Colors.orange[600],
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(24),
+                  bottomRight: Radius.circular(24),
                 ),
               ),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    icon: Icon(Icons.arrow_back, color: Colors.orange[800]),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Scan TO',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange[800],
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.arrow_back, color: Colors.white),
+                          label: const Text(
+                            'Quay lại',
+                            style: TextStyle(color: Colors.white, fontSize: 16),
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(Icons.photo_library, color: Colors.white),
+                          onPressed: _scanFromGallery,
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
-                  IconButton(
-                    icon: Icon(Icons.photo_library, color: Colors.orange[800]),
-                    onPressed: _scanFromGallery,
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.inventory_2,
+                          size: 50,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'SPX Express',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -288,14 +311,15 @@ class _ScanTOState extends State<ScanTO>
                             }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange[700],
+                            backgroundColor: Colors.orange[600],
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 20, vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            elevation: 2,
+                            elevation: 6,
+                            shadowColor: Colors.orange.withOpacity(0.5),
                           ),
                           child: const Text(
                             'Confirm',
